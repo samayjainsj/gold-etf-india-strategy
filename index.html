@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gold ETFs in India – Comparison Report</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --wm-blue: #0053e2;
+      --wm-spark: #ffc220;
+      --wm-green: #2a8703;
+      --wm-red: #ea1100;
+      --wm-gray-160: #1c1c1c;
+      --wm-gray-10: #f5f5f5;
+    }
+    body { background: var(--wm-gray-10); color: var(--wm-gray-160); }
+    .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .chart-wrap { position: relative; height: 360px; width: 100%; }
+    .badge { display:inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
+    .badge-blue { background: #e6efff; color: var(--wm-blue); }
+    .badge-yellow { background: #fff4cc; color: #7a5a00; }
+    .badge-green { background: #e1f4d8; color: var(--wm-green); }
+    .badge-red { background: #ffe1de; color: var(--wm-red); }
+    th { background: #f0f4fb; }
+    tr:hover td { background: #fafbff; }
+    .kpi-num { font-size: 28px; font-weight: 700; color: var(--wm-blue); }
+  </style>
+</head>
+<body class="min-h-screen">
+  <!-- Header -->
+  <header class="bg-white border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold" style="color: var(--wm-blue);">🥇 Gold ETFs in India – Comparison Report</h1>
+        <p class="text-sm text-gray-600 mt-1">A comparative dashboard of major Gold ETFs listed on NSE / BSE</p>
+      </div>
+      <div class="text-right text-xs text-gray-500">
+        <div>Generated: <span id="gen-date"></span></div>
+        <div class="mt-1">⚠️ Figures are <strong>illustrative</strong> (representative, not live)</div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 py-8 space-y-8">
+
+    <!-- Executive Summary (TOP) -->
+    <section class="card p-6">
+      <h2 class="text-lg font-bold mb-3" style="color: var(--wm-blue);">📌 Executive Summary</h2>
+      <ul class="list-disc list-inside text-sm leading-7 text-gray-700">
+        <li><strong>14 major Gold ETFs</strong> are actively traded on NSE/BSE — all back-tested to physical 99.5% pure gold.</li>
+        <li><strong>Nippon India ETF Gold BeES (GOLDBEES)</strong> remains the most liquid with the highest daily traded volume and largest AUM.</li>
+        <li><strong>Expense ratios</strong> typically range between <strong>0.30% – 0.85%</strong> — picking a low-cost ETF compounds nicely over the long term.</li>
+        <li>Returns across funds are tightly clustered — the real differentiators are <strong>tracking error, liquidity, and expense ratio</strong>.</li>
+      </ul>
+    </section>
+
+    <!-- KPIs -->
+    <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="card p-5">
+        <div class="text-xs text-gray-500 uppercase">Total ETFs Tracked</div>
+        <div class="kpi-num">14</div>
+      </div>
+      <div class="card p-5">
+        <div class="text-xs text-gray-500 uppercase">Lowest Expense Ratio</div>
+        <div class="kpi-num">0.32%</div>
+        <div class="text-xs text-gray-500 mt-1">Mirae Asset Gold ETF</div>
+      </div>
+      <div class="card p-5">
+        <div class="text-xs text-gray-500 uppercase">Largest by AUM</div>
+        <div class="kpi-num">GOLDBEES</div>
+        <div class="text-xs text-gray-500 mt-1">~₹14,500 Cr</div>
+      </div>
+      <div class="card p-5">
+        <div class="text-xs text-gray-500 uppercase">1-Yr Avg Return*</div>
+        <div class="kpi-num" style="color: var(--wm-green);">~57.2%</div>
+        <div class="text-xs text-gray-500 mt-1">Across category (gold rally!)</div>
+      </div>
+    </section>
+
+    <!-- Charts Row 1 -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="card p-6">
+        <h3 class="font-bold mb-2">Expense Ratio Comparison (%)</h3>
+        <p class="text-xs text-gray-500 mb-3">Lower is better — it directly eats into your returns.</p>
+        <div class="chart-wrap"><canvas id="expenseChart"></canvas></div>
+      </div>
+      <div class="card p-6">
+        <h3 class="font-bold mb-2">Approx. AUM (₹ Crores)</h3>
+        <p class="text-xs text-gray-500 mb-3">Higher AUM usually means better liquidity & tighter spreads.</p>
+        <div class="chart-wrap"><canvas id="aumChart"></canvas></div>
+      </div>
+    </section>
+
+    <!-- Charts Row 2 -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="card p-6">
+        <h3 class="font-bold mb-2">1-Year Return (%)</h3>
+        <p class="text-xs text-gray-500 mb-3">Returns mirror gold price movement; small variance = tracking error.</p>
+        <div class="chart-wrap"><canvas id="returnChart"></canvas></div>
+      </div>
+      <div class="card p-6">
+        <h3 class="font-bold mb-2">3-Yr vs 5-Yr CAGR</h3>
+        <p class="text-xs text-gray-500 mb-3">Long-term consistency snapshot.</p>
+        <div class="chart-wrap"><canvas id="cagrChart"></canvas></div>
+      </div>
+    </section>
+
+    <!-- ETF vs Gold Benchmark Comparison -->
+    <section class="card p-6 border-l-4" style="border-color: var(--wm-spark);">
+      <h2 class="text-lg font-bold mb-2" style="color: var(--wm-blue);">🥇 ETF vs Physical Gold – Which Tracks Best?</h2>
+      <p class="text-sm text-gray-600 mb-4">
+        The <strong>"best"</strong> Gold ETF is the one that loses the <em>least</em> to actual gold returns. Underperformance comes from
+        <strong>expense ratio + tracking error</strong>. We benchmark every ETF against physical domestic gold prices below.
+      </p>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="p-4 rounded-lg" style="background: #fff4cc;">
+          <div class="text-xs uppercase text-gray-600">Gold 1-Yr Return</div>
+          <div class="text-2xl font-bold" style="color: #7a5a00;">~58.0%</div>
+          <div class="text-xs text-gray-500">Domestic INR price – huge rally!</div>
+        </div>
+        <div class="p-4 rounded-lg" style="background: #fff4cc;">
+          <div class="text-xs uppercase text-gray-600">Gold 3-Yr CAGR</div>
+          <div class="text-2xl font-bold" style="color: #7a5a00;">~27.5%</div>
+          <div class="text-xs text-gray-500">Annualised</div>
+        </div>
+        <div class="p-4 rounded-lg" style="background: #fff4cc;">
+          <div class="text-xs uppercase text-gray-600">Gold 5-Yr CAGR</div>
+          <div class="text-2xl font-bold" style="color: #7a5a00;">~18.3%</div>
+          <div class="text-xs text-gray-500">Annualised</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div>
+          <h3 class="font-bold mb-2">ETF Return vs Gold Return (1-Yr)</h3>
+          <p class="text-xs text-gray-500 mb-3">Yellow line = physical gold benchmark. Closer to it = better.</p>
+          <div class="chart-wrap"><canvas id="vsGoldChart"></canvas></div>
+        </div>
+        <div>
+          <h3 class="font-bold mb-2">Tracking Difference (ETF – Gold) %</h3>
+          <p class="text-xs text-gray-500 mb-3">Closer to zero = ETF mirrors gold more accurately. Negative = underperformance.</p>
+          <div class="chart-wrap"><canvas id="trackErrChart"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Best Pick Leaderboard -->
+    <section class="card p-6">
+      <h2 class="text-lg font-bold mb-2" style="color: var(--wm-blue);">🏆 Best Pick Leaderboard</h2>
+      <p class="text-sm text-gray-600 mb-4">
+        Composite score out of 100 — weighted: <strong>40% tracking accuracy</strong>, <strong>40% low expense ratio</strong>, <strong>20% liquidity</strong>.
+      </p>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div>
+          <div class="chart-wrap"><canvas id="bestPickChart"></canvas></div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm border-collapse">
+            <thead>
+              <tr class="text-left">
+                <th class="px-3 py-2 border-b">Rank</th>
+                <th class="px-3 py-2 border-b">ETF</th>
+                <th class="px-3 py-2 border-b text-right">Track Diff (1Y) %</th>
+                <th class="px-3 py-2 border-b text-right">Expense %</th>
+                <th class="px-3 py-2 border-b text-right">Score / 100</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboardBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <p class="text-xs text-gray-500 mt-4">
+        💡 <strong>How to read this:</strong> A high score means the ETF tracks gold tightly, has a low expense ratio, AND trades with good volume.
+        It's the closest thing to "buying gold without the storage hassle."
+      </p>
+    </section>
+
+    <!-- Tax + Hidden Costs Comparison -->
+    <section class="card p-6 border-l-4" style="border-color: var(--wm-green);">
+      <h2 class="text-lg font-bold mb-2" style="color: var(--wm-blue);">💼 Real-World Returns – Top 5 ETFs (Post Budget 2024 Tax)</h2>
+      <p class="text-sm text-gray-600 mb-4">
+        Apples-to-apples comparison of <strong>₹10,00,000 invested for 5 years</strong>, accounting for
+        <strong>Budget 2024 LTCG tax (12.5%)</strong> + demat AMC + brokerage costs.
+      </p>
+
+      <div class="p-3 rounded-lg mb-6 text-xs" style="background: #ffe1de; border-left: 4px solid var(--wm-red);">
+        🚫 <strong>Why no physical gold here?</strong> Earlier analysis (see Git history) showed physical gold loses ~₹1.8L+ to GST,
+        making charges, locker, insurance, and resale haircuts on a ₹10L investment. <strong>Verdict: not a serious investment vehicle</strong> —
+        skip it entirely and stick to ETFs.
+      </div>
+
+      <!-- Tax rules summary -->
+      <div class="p-3 rounded-lg mb-6 text-xs" style="background: #e6efff;">
+        <div class="font-bold mb-1" style="color: var(--wm-blue);">Gold ETFs Tax Rules (post Jul-2024)</div>
+        <div>LTCG (held > 12 months): <strong>12.5%</strong> flat (no indexation benefit)</div>
+        <div>STCG (held ≤ 12 months): taxed at your <strong>income slab rate</strong></div>
+        <div class="text-gray-500 mt-1">+ Demat AMC ₹400/yr + brokerage ₹500 round-trip</div>
+      </div>
+
+      <!-- KPI cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="p-4 rounded-lg" style="background: #e1f4d8;">
+          <div class="text-xs uppercase text-gray-600">🥇 Best ETF (Net Take-Home)</div>
+          <div class="text-xl font-bold" style="color: var(--wm-green);" id="taxBestValue">–</div>
+          <div class="text-xs text-gray-500" id="taxBestName"></div>
+        </div>
+        <div class="p-4 rounded-lg" style="background: #fff4cc;">
+          <div class="text-xs uppercase text-gray-600">🥈 Runner-Up</div>
+          <div class="text-xl font-bold" style="color: #7a5a00;" id="taxBestEtfValue">–</div>
+          <div class="text-xs text-gray-500" id="taxBestEtfName"></div>
+        </div>
+        <div class="p-4 rounded-lg" style="background: #f0f4fb;">
+          <div class="text-xs uppercase text-gray-600">📝 5th Place</div>
+          <div class="text-xl font-bold" style="color: var(--wm-blue);" id="taxWorstValue">–</div>
+          <div class="text-xs text-gray-500" id="taxWorstName"></div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div>
+          <h3 class="font-bold mb-2">Net Take-Home After LTCG Tax (₹)</h3>
+          <div class="chart-wrap"><canvas id="taxNetChart"></canvas></div>
+        </div>
+        <div>
+          <h3 class="font-bold mb-2">Cost & Tax Breakdown (₹)</h3>
+          <p class="text-xs text-gray-500 mb-2">Stacked: Demat AMC, brokerage, and 12.5% LTCG tax.</p>
+          <div class="chart-wrap"><canvas id="taxCostChart"></canvas></div>
+        </div>
+      </div>
+
+      <h3 class="font-bold mb-3">📋 Detailed Breakdown (₹10L invested, 5-year hold)</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm border-collapse">
+          <thead>
+            <tr class="text-left">
+              <th class="px-3 py-2 border-b">Rank</th>
+              <th class="px-3 py-2 border-b">Asset</th>
+              <th class="px-3 py-2 border-b text-right">CAGR</th>
+              <th class="px-3 py-2 border-b text-right">Gross Final</th>
+              <th class="px-3 py-2 border-b text-right">Total Costs</th>
+              <th class="px-3 py-2 border-b text-right">LTCG Tax</th>
+              <th class="px-3 py-2 border-b text-right">Net Take-Home</th>
+              <th class="px-3 py-2 border-b text-right">Net Gain %</th>
+            </tr>
+          </thead>
+          <tbody id="taxTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="mt-4 p-4 rounded-lg" style="background: #fffaeb; border-left: 4px solid var(--wm-spark);">
+        <div class="font-bold mb-2">💡 Key Insights</div>
+        <ul class="list-disc list-inside text-sm leading-7">
+          <li><strong>Top 5 ETFs are nearly identical post-tax</strong> — the spread between #1 and #5 is tiny (~₹15–20k on ₹10L).</li>
+          <li><strong>Tax tip:</strong> Hold ETFs for > 12 months to qualify for the 12.5% LTCG rate. Selling earlier means slab-rate STCG (up to 30%).</li>
+          <li><strong>Brokerage matters less than you'd think</strong> — ₹500 round-trip is rounding error vs ~₹1.6L of LTCG tax.</li>
+          <li><strong>Verdict:</strong> Pick the ETF with the lowest expense + decent liquidity — typically <code>GOLDIETF</code>, <code>GOLDETF</code>, or <code>HDFCGOLD</code>. The differences in net take-home are too small to obsess over.</li>
+        </ul>
+      </div>
+      <p class="text-xs text-gray-500 mt-3">
+        📐 <strong>Assumptions:</strong> 5Y CAGR ~18.3% (gold benchmark) · Demat AMC ₹400/yr · Brokerage ₹500 round-trip ·
+        Newer ETFs without 5Y data are projected as (gold CAGR − expense ratio).
+      </p>
+    </section>
+
+    <!-- ETF Table -->
+    <section class="card p-6">
+      <h3 class="font-bold mb-4">📋 Full ETF Comparison Table</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm border-collapse">
+          <thead>
+            <tr class="text-left">
+              <th class="px-3 py-2 border-b">#</th>
+              <th class="px-3 py-2 border-b">ETF Name</th>
+              <th class="px-3 py-2 border-b">NSE Ticker</th>
+              <th class="px-3 py-2 border-b">Fund House</th>
+              <th class="px-3 py-2 border-b text-right">Expense %</th>
+              <th class="px-3 py-2 border-b text-right">AUM (₹ Cr)</th>
+              <th class="px-3 py-2 border-b text-right">1Y Ret %</th>
+              <th class="px-3 py-2 border-b text-right" title="Annualised std dev of daily return diff vs gold (published values, approx.)">Tracking Error %</th>
+              <th class="px-3 py-2 border-b">Liquidity</th>
+            </tr>
+          </thead>
+          <tbody id="etfTableBody"></tbody>
+        </table>
+      </div>
+      <p class="text-xs text-gray-500 mt-3">
+        * Figures are <strong>approximate / illustrative</strong> for educational purposes. Always check the latest factsheet
+        from the AMC and AMFI before investing.
+      </p>
+      <p class="text-xs text-gray-500 mt-1">
+        ℹ️ <strong>Tracking Error</strong> = annualised standard deviation of daily ETF-vs-gold return differences (a
+        consistency metric, lower is better, typical range 0.05%–0.30%). This is different from
+        <strong>Tracking Difference</strong> (the cumulative % gap shown in the “ETF vs Gold” section above), which is
+        roughly equal to the expense ratio over time.
+      </p>
+    </section>
+
+    <!-- Daily / Monthly / Quarterly Breakdown -->
+    <section class="card p-6">
+      <h3 class="font-bold mb-4">📅 Performance Breakdown – Category Average</h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div>
+          <h4 class="font-semibold text-sm mb-2">Daily (last 30 days)</h4>
+          <div class="chart-wrap" style="height: 220px;"><canvas id="dailyChart"></canvas></div>
+        </div>
+        <div>
+          <h4 class="font-semibold text-sm mb-2">Monthly (last 12 months)</h4>
+          <div class="chart-wrap" style="height: 220px;"><canvas id="monthlyChart"></canvas></div>
+        </div>
+        <div>
+          <h4 class="font-semibold text-sm mb-2">Quarterly (last 4 quarters)</h4>
+          <div class="chart-wrap" style="height: 220px;"><canvas id="quarterlyChart"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- How to Pick -->
+    <section class="card p-6">
+      <h3 class="font-bold mb-3">🧠 How to Pick the Right Gold ETF</h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+        <div class="p-4 rounded-lg" style="background: #e6efff;">
+          <div class="font-bold mb-1" style="color: var(--wm-blue);">1. Expense Ratio</div>
+          <p>Even a 0.3% difference compounds heavily over 10+ years. Prefer ratios under 0.5%.</p>
+        </div>
+        <div class="p-4 rounded-lg" style="background: #fff4cc;">
+          <div class="font-bold mb-1" style="color: #7a5a00;">2. Tracking Error</div>
+          <p>How closely the ETF mirrors actual gold prices. Lower = better. Check factsheets.</p>
+        </div>
+        <div class="p-4 rounded-lg" style="background: #e1f4d8;">
+          <div class="font-bold mb-1" style="color: var(--wm-green);">3. Liquidity / Volumes</div>
+          <p>Higher daily traded volume → tighter bid-ask spread → cheaper to buy/sell.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Executive Summary (BOTTOM) -->
+    <section class="card p-6 border-l-4" style="border-color: var(--wm-spark);">
+      <h2 class="text-lg font-bold mb-3" style="color: var(--wm-blue);">🏁 Bottom-Line Takeaways</h2>
+      <ol class="list-decimal list-inside text-sm leading-7 text-gray-700">
+        <li><strong>For most investors:</strong> GOLDBEES, SBI Gold ETF, and HDFC Gold ETF strike the best balance of cost + liquidity.</li>
+        <li><strong>For cost-sensitive long-term investors:</strong> Mirae Asset, DSP, and Edelweiss Gold ETFs offer some of the lowest expense ratios.</li>
+        <li><strong>For lump-sum / large investors:</strong> Stick with high-AUM, high-volume ETFs to minimise impact cost.</li>
+        <li><strong>Tax note:</strong> Post Budget 2024, Gold ETFs held > 12 months qualify as long-term, taxed at 12.5% (without indexation).</li>
+        <li><strong>Diversify:</strong> Don't concentrate; consider blending Gold ETFs with Gold Funds-of-Funds or other asset classes.</li>
+      </ol>
+    </section>
+
+    <footer class="text-center text-xs text-gray-500 py-6">
+      Built by <strong>SamAI Pup 🐶</strong> · Disclaimer: This is not investment advice. Data shown is illustrative — verify with AMFI &amp; AMC factsheets before investing.
+    </footer>
+  </main>
+
+  <script src="data.js"></script>
+  <script src="tax.js"></script>
+  <script src="charts.js"></script>
+</body>
+</html>

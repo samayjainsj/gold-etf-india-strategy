@@ -1,0 +1,28 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# Node / npm (just in case)
+node_modules/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Build artifacts
+index.bundled.html
+
+# Logs
+*.log
+/tmp/goldetf-update.log
+
+# Secrets / env
+.env
+.env.local
+push_to_ghe.sh
