@@ -23,6 +23,9 @@ const liquidityBadge = (lvl) => {
 // Real tracking error: lower = better. Typical Indian Gold ETF range 0.05% – 0.30%.
 const trackErrColor = (v) => v <= 0.10 ? 'var(--wm-green)' : (v <= 0.18 ? '#7a5a00' : 'var(--wm-red)');
 
+// Null-safe number formatter — some ETFs may not have full NAV history yet.
+const fmt = (v, dec = 2) => (v == null || Number.isNaN(v)) ? '—' : Number(v).toFixed(dec);
+
 const tbody = document.getElementById("etfTableBody");
 tbody.innerHTML = goldEtfs.map((e, i) => `
   <tr>
@@ -30,10 +33,10 @@ tbody.innerHTML = goldEtfs.map((e, i) => `
     <td class="px-3 py-2 border-b font-medium">${e.name}</td>
     <td class="px-3 py-2 border-b"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">${e.ticker}</code></td>
     <td class="px-3 py-2 border-b text-gray-600">${e.house}</td>
-    <td class="px-3 py-2 border-b text-right">${e.expense.toFixed(2)}</td>
+    <td class="px-3 py-2 border-b text-right">${fmt(e.expense, 2)}</td>
     <td class="px-3 py-2 border-b text-right">${e.aum.toLocaleString("en-IN")}</td>
-    <td class="px-3 py-2 border-b text-right" style="color: var(--wm-green); font-weight: 600;">${e.ret1y.toFixed(1)}</td>
-    <td class="px-3 py-2 border-b text-right font-semibold" style="color: ${trackErrColor(e.trackingError)};">${e.trackingError.toFixed(2)}</td>
+    <td class="px-3 py-2 border-b text-right" style="color: var(--wm-green); font-weight: 600;">${fmt(e.ret1y, 1)}</td>
+    <td class="px-3 py-2 border-b text-right font-semibold" style="color: ${trackErrColor(e.trackingError)};">${fmt(e.trackingError, 2)}</td>
     <td class="px-3 py-2 border-b">${liquidityBadge(e.liquidity)}</td>
   </tr>
 `).join("");
@@ -205,8 +208,8 @@ lbBody.innerHTML = ranked.map((e, i) => `
   <tr ${i === 0 ? 'style="background:#e1f4d8;"' : ''}>
     <td class="px-3 py-2 border-b font-bold text-center">${medal(i)}</td>
     <td class="px-3 py-2 border-b"><strong>${e.ticker}</strong> <span class="text-xs text-gray-500">· ${e.house}</span></td>
-    <td class="px-3 py-2 border-b text-right" style="color: ${e.trackDiff1y >= -0.4 ? 'var(--wm-green)' : 'var(--wm-red)'};">${e.trackDiff1y.toFixed(2)}</td>
-    <td class="px-3 py-2 border-b text-right">${e.expense.toFixed(2)}</td>
+    <td class="px-3 py-2 border-b text-right" style="color: ${e.trackDiff1y == null ? 'var(--wm-blue)' : (e.trackDiff1y >= -0.4 ? 'var(--wm-green)' : 'var(--wm-red)')};">${fmt(e.trackDiff1y, 2)}</td>
+    <td class="px-3 py-2 border-b text-right">${fmt(e.expense, 2)}</td>
     <td class="px-3 py-2 border-b text-right font-bold" style="color: var(--wm-blue);">${e.bestPickScore}</td>
   </tr>
 `).join("");
