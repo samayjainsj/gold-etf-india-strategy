@@ -2,13 +2,21 @@
 """
 Gold ETF data updater.
 
-Fetches latest NAVs and historical returns for every Gold ETF in India from
-MFAPI.in (a free public mirror of AMFI NAV history) and regenerates `data.js`
-with fresh numbers so the static HTML report always reflects the latest data.
+Fetches actual exchange close prices (NSE) for every Gold ETF in India via
+Yahoo Finance's public chart API and regenerates `data.js` so the static HTML
+report always reflects the latest market-traded data — the actual returns an
+investor experiences when buying/selling on NSE.
+
+Why Yahoo Finance and not MFAPI?
+  * MFAPI returns NAV (declared by the AMC) which can diverge from market
+    price for ETFs (premium/discount, dividend variants, FoFs, etc.).
+  * Yahoo Finance proxies NSE close prices — the actual liquid traded value.
 
 Usage:
     python update_data.py            # fetch + regenerate data.js
     python update_data.py --dry-run  # show what WOULD be written, no file change
+    python update_data.py --verify   # print source URLs + side-by-side compare
+                                     # (live vs baseline) so you can spot-check
 
 Run this monthly (or via cron / launchd) to keep the report fresh.
 """
@@ -31,53 +39,54 @@ DATA_JS_PATH = REPO_ROOT / "data.js"
 # ----------------------------------------------------------------------------
 # Static metadata: AMFI scheme codes for each Gold ETF.
 # Scheme codes are stable; only NAV history changes over time.
-# Discovered once via MFAPI search (https://api.mfapi.in/mf/search?q=gold).
+# Discovered once via Yahoo Finance / NSE listings.
 # ----------------------------------------------------------------------------
 
 
 @dataclass
 class EtfMeta:
     name: str
-    ticker: str
+    ticker: str             # NSE symbol (also used for Yahoo Finance lookup as <ticker>.NS)
     house: str
     expense: float          # latest expense ratio (manually maintained)
     aum_cr: int             # latest AUM in ₹ crore (manually maintained)
     liquidity: str          # Very High | High | Medium | Low (manual)
-    scheme_code: int        # AMFI scheme code for NAV lookup
     tracking_error: float   # latest published tracking error (manually maintained)
-    # Curated baseline returns (used as fallback when MFAPI data is missing
+    # Curated baseline returns (used as fallback when live data is missing
     # or implausible). Refresh quarterly from AMC factsheets / Value Research.
     base_ret1y: float = 0.0
     base_ret3y: float | None = None
     base_ret5y: float | None = None
 
 
-# Baseline gold returns as of Apr 2026 — all gold ETFs should track these
-# closely (within ~expense ratio). Numbers from AMC factsheets / Value Research.
+# Baseline gold returns (illustrative — verify against AMC factsheets).
+# All gold ETFs MUST cluster within ~1pp since they hold the same physical gold;
+# differences come almost entirely from expense ratios.
 ETFS: list[EtfMeta] = [
-    EtfMeta("Nippon India ETF Gold BeES",   "GOLDBEES",   "Nippon India MF", 0.79, 14500, "Very High", 102885, 0.10, 57.4, 27.0, 17.9),
-    EtfMeta("SBI Gold ETF",                 "SETFGOLD",   "SBI MF",          0.73,  4200, "High",      119750, 0.12, 57.2, 26.9, 17.8),
-    EtfMeta("HDFC Gold ETF",                "HDFCGOLD",   "HDFC MF",         0.59,  3100, "High",      119089, 0.08, 57.4, 27.1, 18.0),
-    EtfMeta("ICICI Prudential Gold ETF",    "GOLDIETF",   "ICICI Pru MF",    0.50,  4500, "High",      120505, 0.07, 57.5, 27.2, 18.1),
-    EtfMeta("Kotak Gold ETF",               "KOTAKGOLD",  "Kotak MF",        0.55,  3800, "High",      117707, 0.10, 57.3, 27.0, 17.9),
-    EtfMeta("Axis Gold ETF",                "AXISGOLD",   "Axis MF",         0.56,  1100, "Medium",    119551, 0.15, 57.1, 26.8, 17.8),
-    EtfMeta("UTI Gold ETF",                 "GOLDSHARE",  "UTI MF",          0.50,  1300, "Medium",    102659, 0.12, 57.3, 27.0, 17.9),
-    EtfMeta("Aditya Birla SL Gold ETF",     "BSLGOLDETF", "ABSL MF",         0.54,   580, "Medium",    119879, 0.20, 56.9, 26.7, 17.7),
-    EtfMeta("Mirae Asset Gold ETF",         "GOLDETF",    "Mirae Asset MF",  0.32,   350, "Medium",    151582, 0.06, 57.5, None, None),
-    EtfMeta("LIC MF Gold ETF",              "LICMFGOLD",  "LIC MF",          0.41,   220, "Low",       119932, 0.18, 57.2, 26.9, 17.8),
-    EtfMeta("Quantum Gold ETF",             "QGOLDHALF",  "Quantum MF",      0.78,   290, "Low",       101824, 0.25, 56.8, 26.6, 17.6),
-    EtfMeta("Invesco India Gold ETF",       "IVZINGOLD",  "Invesco MF",      0.55,   180, "Low",       119529, 0.20, 56.9, 26.7, 17.7),
-    EtfMeta("DSP Gold ETF",                 "DSPGOLDETF", "DSP MF",          0.39,    95, "Low",       151738, 0.10, 57.3, None, None),
-    EtfMeta("Edelweiss Gold ETF",           "EGOLD",      "Edelweiss MF",    0.36,    75, "Low",       151715, 0.08, 57.4, None, None),
+    EtfMeta("Nippon India ETF Gold BeES",   "GOLDBEES",   "Nippon India MF", 0.79, 14500, "Very High", 0.10, 57.4, 27.0, 17.9),
+    EtfMeta("SBI Gold ETF",                 "SETFGOLD",   "SBI MF",          0.73,  4200, "High",      0.12, 57.2, 26.9, 17.8),
+    EtfMeta("HDFC Gold ETF",                "HDFCGOLD",   "HDFC MF",         0.59,  3100, "High",      0.08, 57.4, 27.1, 18.0),
+    EtfMeta("ICICI Prudential Gold ETF",    "GOLDIETF",   "ICICI Pru MF",    0.50,  4500, "High",      0.07, 57.5, 27.2, 18.1),
+    EtfMeta("Kotak Gold ETF",               "KOTAKGOLD",  "Kotak MF",        0.55,  3800, "High",      0.10, 57.3, 27.0, 17.9),
+    EtfMeta("Axis Gold ETF",                "AXISGOLD",   "Axis MF",         0.56,  1100, "Medium",    0.15, 57.1, 26.8, 17.8),
+    EtfMeta("UTI Gold ETF",                 "GOLDSHARE",  "UTI MF",          0.50,  1300, "Medium",    0.12, 57.3, 27.0, 17.9),
+    EtfMeta("Aditya Birla SL Gold ETF",     "BSLGOLDETF", "ABSL MF",         0.54,   580, "Medium",    0.20, 56.9, 26.7, 17.7),
+    EtfMeta("Mirae Asset Gold ETF",         "GOLDETF",    "Mirae Asset MF",  0.32,   350, "Medium",    0.06, 57.5, None, None),
+    EtfMeta("LIC MF Gold ETF",              "LICMFGOLD",  "LIC MF",          0.41,   220, "Low",       0.18, 57.2, 26.9, 17.8),
+    EtfMeta("Quantum Gold ETF",             "QGOLDHALF",  "Quantum MF",      0.78,   290, "Low",       0.25, 56.8, 26.6, 17.6),
+    EtfMeta("Invesco India Gold ETF",       "IVZINGOLD",  "Invesco MF",      0.55,   180, "Low",       0.20, 56.9, 26.7, 17.7),
+    EtfMeta("DSP Gold ETF",                 "DSPGOLDETF", "DSP MF",          0.39,    95, "Low",       0.10, 57.3, None, None),
+    EtfMeta("Edelweiss Gold ETF",           "EGOLD",      "Edelweiss MF",    0.36,    75, "Low",       0.08, 57.4, None, None),
 ]
 
-MFAPI_URL = "https://api.mfapi.in/mf/{scheme_code}"
+# Yahoo Finance public chart API — returns adjusted-close history (handles splits/dividends)
+YAHOO_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=5y&interval=1d"
 REQUEST_TIMEOUT = 15
 
 # Sanity check: gold ETFs all hold the same physical gold, so their returns
 # MUST cluster within ~SANITY_TOLERANCE_PCT percentage points. Fetched values
-# outside this band are treated as bad data (wrong scheme code, dividend-variant
-# fund, etc.) and replaced with the curated baseline.
+# outside this band are treated as bad data (wrong ticker, delisted, etc.)
+# and replaced with the curated baseline.
 SANITY_TOLERANCE_PCT = 3.0
 
 
@@ -117,21 +126,43 @@ class NavSeries:
         return round(ret, 2)
 
 
-def fetch_nav_series(scheme_code: int) -> NavSeries:
-    """Pull full NAV history from MFAPI. Newest entry is index 0."""
-    url = MFAPI_URL.format(scheme_code=scheme_code)
-    req = urllib.request.Request(url, headers={"User-Agent": "gold-etf-india-strategy/1.0"})
+def fetch_price_series(nse_ticker: str) -> NavSeries:
+    """Pull 5y daily close-price history from Yahoo Finance for an NSE ticker.
+
+    Yahoo Finance returns adjusted-close prices, which already account for
+    splits/distributions — giving the true total return an investor experienced.
+    Newest entry is at index 0.
+    """
+    url = YAHOO_URL.format(symbol=f"{nse_ticker}.NS")
+    req = urllib.request.Request(
+        url,
+        headers={
+            # Yahoo blocks default Python UA — use a browser-like one
+            "User-Agent": "Mozilla/5.0 (gold-etf-india-strategy)",
+        },
+    )
     with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
-        payload = json.load(resp).get("data", [])
+        payload = json.load(resp)
+
+    result = (payload.get("chart", {}).get("result") or [None])[0]
+    if not result:
+        return NavSeries()
+
+    timestamps = result.get("timestamp") or []
+    indicators = result.get("indicators", {})
+    # Prefer adjusted close (handles splits/dividends correctly)
+    closes = (
+        (indicators.get("adjclose") or [{}])[0].get("adjclose")
+        or (indicators.get("quote") or [{}])[0].get("close")
+        or []
+    )
+
     series = NavSeries()
-    for row in payload:
-        try:
-            d = datetime.strptime(row["date"], "%d-%m-%Y").date()
-            nav = float(row["nav"])
-        except (KeyError, ValueError):
+    for ts, price in zip(timestamps, closes):
+        if ts is None or price is None or price <= 0:
             continue
-        if nav > 0:
-            series.points.append((d, nav))
+        d = datetime.utcfromtimestamp(ts).date()
+        series.points.append((d, float(price)))
     series.points.sort(key=lambda p: p[0], reverse=True)
     return series
 
@@ -251,7 +282,7 @@ def render_data_js(
 
     return f"""// Gold ETF data – India
 // AUTO-GENERATED on {fetched_at.isoformat(timespec='seconds')} by update_data.py
-// NAVs sourced from MFAPI.in (free AMFI mirror). Re-run the script monthly.
+// Close prices sourced from Yahoo Finance (NSE close-price proxy). Re-run monthly.
 // Verify live values from AMFI / AMC factsheets before investing.
 
 const goldEtfs = [
@@ -303,6 +334,59 @@ const quarterlyReturns = [4.1, 5.2, 3.0, 4.8];
 
 
 # ----------------------------------------------------------------------------
+def yahoo_chart_url(ticker: str) -> str:
+    """Verifiable URL where anyone can inspect the source data."""
+    return YAHOO_URL.format(symbol=f"{ticker}.NS")
+
+
+def yahoo_quote_url(ticker: str) -> str:
+    """Human-friendly Yahoo Finance page for the ticker."""
+    return f"https://finance.yahoo.com/quote/{ticker}.NS"
+
+
+def print_verify_report(
+    series_by_ticker: dict[str, NavSeries],
+) -> None:
+    """Side-by-side: live (Yahoo) vs curated baseline, with source URLs.
+    Helps spot-check the data after each update.
+    """
+    validated = compute_validated_returns(series_by_ticker)
+
+    print("\n" + "=" * 100)
+    print("🔍 VERIFY REPORT — cross-check live data against AMC factsheets / Value Research")
+    print("=" * 100)
+    print(f"{'Ticker':<12} {'Period':<6} {'Live':>8} {'Baseline':>10} {'Used':>8} {'Source':<8}  Verify URL")
+    print("-" * 100)
+
+    for etf in ETFS:
+        per = validated[etf.ticker]
+        verify_url = yahoo_quote_url(etf.ticker)
+        for years, key in [(1, "ret1y"), (3, "ret3y"), (5, "ret5y")]:
+            live = (
+                series_by_ticker[etf.ticker].cagr_over(years)
+                if etf.ticker in series_by_ticker else None
+            )
+            base = _baseline(etf, years)
+            used, src = per[key]
+            live_s = f"{live:>7.2f}%" if live is not None else "      —"
+            base_s = f"{base:>9.2f}%" if base is not None else "        —"
+            used_s = f"{used:>7.2f}%" if used is not None else "      —"
+            src_icon = {"live": "✅ live", "baseline": "⚠️  base", "missing": "❌ miss"}[src]
+            url_col = verify_url if years == 1 else ""
+            print(f"{etf.ticker:<12} {key:<6} {live_s:>8} {base_s:>10} {used_s:>8} {src_icon:<10} {url_col}")
+        print()
+
+    print("=" * 100)
+    print("💡 How to verify:")
+    print("   1. Click any URL above (or copy-paste) — opens Yahoo Finance for that ETF")
+    print("   2. Look at the 1Y / 3Y / 5Y return shown on the page")
+    print("   3. Compare to the 'Live' column above — they should match")
+    print("   4. If 'baseline' was used, it means live data drifted >3pp from peer median")
+    print("      (likely a delisted ticker, illiquid fund, or temporary Yahoo data glitch)")
+    print("=" * 100 + "\n")
+
+
+# ----------------------------------------------------------------------------
 # Main
 # ----------------------------------------------------------------------------
 
@@ -311,25 +395,27 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true",
                         help="Compute returns and print summary without writing data.js")
+    parser.add_argument("--verify", action="store_true",
+                        help="Print side-by-side live vs baseline with verifiable Yahoo URLs (no file write)")
     args = parser.parse_args()
 
-    print("📥 Fetching NAV history from MFAPI.in...")
+    print("📥 Fetching NSE close-price history from Yahoo Finance...")
     series_by_ticker: dict[str, NavSeries] = {}
     failed: list[str] = []
     for etf in ETFS:
         try:
-            series = fetch_nav_series(etf.scheme_code)
+            series = fetch_price_series(etf.ticker)
             if not series.points:
-                raise RuntimeError("empty NAV history")
+                raise RuntimeError("empty price history")
             series_by_ticker[etf.ticker] = series
-            latest_date, latest_nav = series.latest()
-            print(f"  ✓ {etf.ticker:<12} {len(series.points):>5} points  latest={latest_date}  NAV=₹{latest_nav:,.2f}")
+            latest_date, latest_price = series.latest()
+            print(f"  ✓ {etf.ticker:<12} {len(series.points):>5} points  latest={latest_date}  close=₹{latest_price:,.2f}")
         except Exception as exc:
             failed.append(f"{etf.ticker} ({exc})")
             print(f"  ✗ {etf.ticker:<12} FAILED: {exc}")
 
     if not series_by_ticker:
-        print("\n❌ All fetches failed. Are you on a network that can reach api.mfapi.in?", file=sys.stderr)
+        print("\n❌ All fetches failed. Are you on a network that can reach query1.finance.yahoo.com?", file=sys.stderr)
         return 1
 
     benchmark = derive_gold_benchmark(series_by_ticker)
@@ -339,6 +425,10 @@ def main() -> int:
 
     if failed:
         print(f"\n⚠️  {len(failed)} ETFs failed: {', '.join(failed)}")
+
+    if args.verify:
+        print_verify_report(series_by_ticker)
+        return 0
 
     rendered = render_data_js(series_by_ticker, benchmark, datetime.now())
 

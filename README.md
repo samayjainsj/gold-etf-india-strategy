@@ -61,7 +61,7 @@ gold-etf-india-strategy/
 ├── data.js                 # AUTO-GENERATED — ETF data + computed metrics
 ├── tax.js                  # Post-tax real-world return calculator
 ├── charts.js               # All chart rendering & table logic
-├── update_data.py          # Fetches NAVs from MFAPI.in → rewrites data.js (stdlib only!)
+├── update_data.py          # Fetches NSE close prices from Yahoo Finance → rewrites data.js (stdlib only!)
 ├── Makefile                # Friendly wrapper commands
 ├── launchd/                # macOS scheduled-job template
 │   └── com.goldetf.update.plist
@@ -119,7 +119,12 @@ Register-ScheduledTask -TaskName "GoldETFUpdate" -Action $action -Trigger $trigg
 
 ## 🌐 Network requirement
 
-`update_data.py` fetches from [api.mfapi.in](https://api.mfapi.in) — a free public mirror of AMFI NAV history. **No API key needed.**
+`update_data.py` fetches from [query1.finance.yahoo.com](https://query1.finance.yahoo.com) — Yahoo Finance's public chart API, which proxies NSE close prices. **No API key needed.**
+
+Why Yahoo Finance and not MFAPI/AMFI?
+- ETFs **trade on the exchange**; close price = what investors actually experience
+- AMFI NAVs can diverge from market price (premium/discount, FoF wrappers, dividend variants)
+- Yahoo's chart endpoint returns adjusted-close (handles splits/distributions automatically)
 
 If a fetch fails (network down, API blocked by your firewall), the script logs an error and exits **without** overwriting `data.js`. Just run `make update` again later.
 
@@ -129,7 +134,8 @@ If a fetch fails (network down, API blocked by your firewall), the script logs a
 
 | Metric | How it's computed |
 |---|---|
-| **1Y / 3Y / 5Y CAGR** | Pulled from MFAPI NAV history; CAGR computed from oldest date ≤ N years ago |
+| **1Y / 3Y / 5Y CAGR** | Computed from Yahoo Finance NSE adjusted-close prices; CAGR from oldest date ≤ N years ago |
+| **Sanity validation** | Gold ETFs all hold the same physical gold, so returns MUST cluster within ~3pp. Fetched values that drift further are rejected and replaced with curated baselines. |
 | **Gold benchmark** | Median of `(best ETF return + its expense ratio)` across all ETFs — derives a "what gold actually did" estimate without a separate price feed |
 | **Tracking difference** | `ETF return − gold benchmark` (cumulative drag, ≈ expense ratio) |
 | **Tracking error** | Manually maintained from AMC factsheets (annualised std-dev of daily diffs — not derivable from monthly NAVs alone) |
@@ -152,8 +158,8 @@ EtfMeta(
     expense=0.45,
     aum_cr=500,
     liquidity="Medium",
-    scheme_code=999999,        # Find at https://api.mfapi.in/mf/search?q=gold
     tracking_error=0.10,
+    base_ret1y=57.0, base_ret3y=27.0, base_ret5y=18.0,  # baseline fallback values
 )
 ```
 
@@ -196,7 +202,7 @@ Steps:
 
 ## ⚠️ Disclaimer
 
-This is **not investment advice**. The numbers shown are educational estimates derived from public MFAPI data and a plain reading of the Income Tax Act. Always verify with the AMC's official factsheet and consult a SEBI-registered advisor before investing.
+This is **not investment advice**. The numbers shown are derived from Yahoo Finance close prices and a plain reading of the Income Tax Act. Always verify with the AMC's official factsheet and consult a SEBI-registered advisor before investing.
 
 ---
 
@@ -208,6 +214,6 @@ This is **not investment advice**. The numbers shown are educational estimates d
 
 ## 🙏 Credits
 
-- NAV data: [MFAPI.in](https://www.mfapi.in/) — free public AMFI mirror
+- Price data: [Yahoo Finance](https://finance.yahoo.com/) — free public NSE close-price proxy
 - UI: [Tailwind CSS](https://tailwindcss.com/) (CDN) + [Chart.js](https://www.chartjs.org/) (CDN)
 - Icons: emoji 😎

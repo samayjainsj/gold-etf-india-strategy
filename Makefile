@@ -1,4 +1,4 @@
-.PHONY: help update serve update-and-share schedule unschedule
+.PHONY: help update verify serve update-and-share schedule unschedule
 
 # Cross-platform "open in browser" helper
 ifeq ($(OS),Windows_NT)
@@ -18,6 +18,7 @@ help:
 	@echo "Gold ETF India — available commands:"
 	@echo ""
 	@echo "  make update             Fetch latest NAVs and rewrite data.js"
+	@echo "  make verify             Spot-check live data vs baselines (with source URLs)"
 	@echo "  make serve              Open the report in your default browser"
 	@echo "  make update-and-share   Update data + open in browser"
 	@echo "  make schedule           (macOS) Install launchd job: monthly auto-update"
@@ -28,6 +29,9 @@ help:
 
 update:
 	$(PY) update_data.py
+
+verify:
+	$(PY) update_data.py --verify
 
 serve:
 	$(OPEN) index.html
