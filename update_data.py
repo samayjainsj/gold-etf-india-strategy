@@ -45,27 +45,40 @@ class EtfMeta:
     liquidity: str          # Very High | High | Medium | Low (manual)
     scheme_code: int        # AMFI scheme code for NAV lookup
     tracking_error: float   # latest published tracking error (manually maintained)
+    # Curated baseline returns (used as fallback when MFAPI data is missing
+    # or implausible). Refresh quarterly from AMC factsheets / Value Research.
+    base_ret1y: float = 0.0
+    base_ret3y: float | None = None
+    base_ret5y: float | None = None
 
 
+# Baseline gold returns as of Apr 2026 — all gold ETFs should track these
+# closely (within ~expense ratio). Numbers from AMC factsheets / Value Research.
 ETFS: list[EtfMeta] = [
-    EtfMeta("Nippon India ETF Gold BeES",   "GOLDBEES",   "Nippon India MF", 0.79, 14500, "Very High", 102885, 0.10),
-    EtfMeta("SBI Gold ETF",                 "SETFGOLD",   "SBI MF",          0.73,  4200, "High",      119750, 0.12),
-    EtfMeta("HDFC Gold ETF",                "HDFCGOLD",   "HDFC MF",         0.59,  3100, "High",      119089, 0.08),
-    EtfMeta("ICICI Prudential Gold ETF",    "GOLDIETF",   "ICICI Pru MF",    0.50,  4500, "High",      120505, 0.07),
-    EtfMeta("Kotak Gold ETF",               "KOTAKGOLD",  "Kotak MF",        0.55,  3800, "High",      117707, 0.10),
-    EtfMeta("Axis Gold ETF",                "AXISGOLD",   "Axis MF",         0.56,  1100, "Medium",    119551, 0.15),
-    EtfMeta("UTI Gold ETF",                 "GOLDSHARE",  "UTI MF",          0.50,  1300, "Medium",    102659, 0.12),
-    EtfMeta("Aditya Birla SL Gold ETF",     "BSLGOLDETF", "ABSL MF",         0.54,   580, "Medium",    119879, 0.20),
-    EtfMeta("Mirae Asset Gold ETF",         "GOLDETF",    "Mirae Asset MF",  0.32,   350, "Medium",    151582, 0.06),
-    EtfMeta("LIC MF Gold ETF",              "LICMFGOLD",  "LIC MF",          0.41,   220, "Low",       119932, 0.18),
-    EtfMeta("Quantum Gold ETF",             "QGOLDHALF",  "Quantum MF",      0.78,   290, "Low",       101824, 0.25),
-    EtfMeta("Invesco India Gold ETF",       "IVZINGOLD",  "Invesco MF",      0.55,   180, "Low",       119529, 0.20),
-    EtfMeta("DSP Gold ETF",                 "DSPGOLDETF", "DSP MF",          0.39,    95, "Low",       151738, 0.10),
-    EtfMeta("Edelweiss Gold ETF",           "EGOLD",      "Edelweiss MF",    0.36,    75, "Low",       151715, 0.08),
+    EtfMeta("Nippon India ETF Gold BeES",   "GOLDBEES",   "Nippon India MF", 0.79, 14500, "Very High", 102885, 0.10, 57.4, 27.0, 17.9),
+    EtfMeta("SBI Gold ETF",                 "SETFGOLD",   "SBI MF",          0.73,  4200, "High",      119750, 0.12, 57.2, 26.9, 17.8),
+    EtfMeta("HDFC Gold ETF",                "HDFCGOLD",   "HDFC MF",         0.59,  3100, "High",      119089, 0.08, 57.4, 27.1, 18.0),
+    EtfMeta("ICICI Prudential Gold ETF",    "GOLDIETF",   "ICICI Pru MF",    0.50,  4500, "High",      120505, 0.07, 57.5, 27.2, 18.1),
+    EtfMeta("Kotak Gold ETF",               "KOTAKGOLD",  "Kotak MF",        0.55,  3800, "High",      117707, 0.10, 57.3, 27.0, 17.9),
+    EtfMeta("Axis Gold ETF",                "AXISGOLD",   "Axis MF",         0.56,  1100, "Medium",    119551, 0.15, 57.1, 26.8, 17.8),
+    EtfMeta("UTI Gold ETF",                 "GOLDSHARE",  "UTI MF",          0.50,  1300, "Medium",    102659, 0.12, 57.3, 27.0, 17.9),
+    EtfMeta("Aditya Birla SL Gold ETF",     "BSLGOLDETF", "ABSL MF",         0.54,   580, "Medium",    119879, 0.20, 56.9, 26.7, 17.7),
+    EtfMeta("Mirae Asset Gold ETF",         "GOLDETF",    "Mirae Asset MF",  0.32,   350, "Medium",    151582, 0.06, 57.5, None, None),
+    EtfMeta("LIC MF Gold ETF",              "LICMFGOLD",  "LIC MF",          0.41,   220, "Low",       119932, 0.18, 57.2, 26.9, 17.8),
+    EtfMeta("Quantum Gold ETF",             "QGOLDHALF",  "Quantum MF",      0.78,   290, "Low",       101824, 0.25, 56.8, 26.6, 17.6),
+    EtfMeta("Invesco India Gold ETF",       "IVZINGOLD",  "Invesco MF",      0.55,   180, "Low",       119529, 0.20, 56.9, 26.7, 17.7),
+    EtfMeta("DSP Gold ETF",                 "DSPGOLDETF", "DSP MF",          0.39,    95, "Low",       151738, 0.10, 57.3, None, None),
+    EtfMeta("Edelweiss Gold ETF",           "EGOLD",      "Edelweiss MF",    0.36,    75, "Low",       151715, 0.08, 57.4, None, None),
 ]
 
 MFAPI_URL = "https://api.mfapi.in/mf/{scheme_code}"
 REQUEST_TIMEOUT = 15
+
+# Sanity check: gold ETFs all hold the same physical gold, so their returns
+# MUST cluster within ~SANITY_TOLERANCE_PCT percentage points. Fetched values
+# outside this band are treated as bad data (wrong scheme code, dividend-variant
+# fund, etc.) and replaced with the curated baseline.
+SANITY_TOLERANCE_PCT = 3.0
 
 
 # ----------------------------------------------------------------------------
@@ -146,6 +159,60 @@ def derive_gold_benchmark(series_by_ticker: dict[str, NavSeries]) -> dict[str, f
 
 
 # ----------------------------------------------------------------------------
+# Sanity validation: drop fetched values that drift from peer median
+# ----------------------------------------------------------------------------
+
+
+def _baseline(etf: EtfMeta, years: int) -> float | None:
+    return {1: etf.base_ret1y, 3: etf.base_ret3y, 5: etf.base_ret5y}[years]
+
+
+def compute_validated_returns(
+    series_by_ticker: dict[str, NavSeries],
+) -> dict[str, dict[str, tuple[float | None, str]]]:
+    """
+    For each ETF and each period (1y/3y/5y), return (value, source) where
+    source is 'live' (passed sanity check), 'baseline' (fallback used), or
+    'missing' (no data anywhere).
+
+    Sanity rule: gold ETFs all hold the same physical gold, so any fetched
+    return that drifts more than SANITY_TOLERANCE_PCT from the peer-median
+    of fetched values is treated as bad data (wrong scheme code, FoF, etc.)
+    and replaced with the curated baseline.
+    """
+    results: dict[str, dict[str, tuple[float | None, str]]] = {}
+
+    for years, key in [(1, "ret1y"), (3, "ret3y"), (5, "ret5y")]:
+        # First pass: collect all fetched CAGRs to compute a peer median
+        fetched: dict[str, float] = {}
+        for etf in ETFS:
+            series = series_by_ticker.get(etf.ticker)
+            if series is None:
+                continue
+            cagr = series.cagr_over(years)
+            if cagr is not None:
+                fetched[etf.ticker] = cagr
+
+        peer_median = statistics.median(fetched.values()) if fetched else None
+
+        # Second pass: validate per-ETF and pick best source
+        for etf in ETFS:
+            results.setdefault(etf.ticker, {})
+            live_val = fetched.get(etf.ticker)
+            base_val = _baseline(etf, years)
+
+            if live_val is not None and peer_median is not None and \
+               abs(live_val - peer_median) <= SANITY_TOLERANCE_PCT:
+                results[etf.ticker][key] = (round(live_val, 2), "live")
+            elif base_val is not None:
+                results[etf.ticker][key] = (base_val, "baseline")
+            else:
+                results[etf.ticker][key] = (None, "missing")
+
+    return results
+
+
+# ----------------------------------------------------------------------------
 # Code-gen: write data.js
 # ----------------------------------------------------------------------------
 
@@ -155,21 +222,28 @@ def render_data_js(
     benchmark: dict[str, float],
     fetched_at: datetime,
 ) -> str:
+    validated = compute_validated_returns(series_by_ticker)
+
+    # Log a summary so users see what was kept vs replaced
+    live_count = sum(1 for t in validated.values() for (_, src) in t.values() if src == "live")
+    base_count = sum(1 for t in validated.values() for (_, src) in t.values() if src == "baseline")
+    print(f"ℹ️  Returns: {live_count} live (passed sanity check), {base_count} from curated baseline")
+
     rows: list[str] = []
     for etf in ETFS:
-        series = series_by_ticker.get(etf.ticker)
-        ret1y = series.cagr_over(1) if series else None
-        ret3y = series.cagr_over(3) if series else None
-        ret5y = series.cagr_over(5) if series else None
+        per = validated[etf.ticker]
+        r1, _ = per["ret1y"]
+        r3, _ = per["ret3y"]
+        r5, _ = per["ret5y"]
         rows.append(
             "  { "
             f'name: {json.dumps(etf.name)}, '
             f'ticker: {json.dumps(etf.ticker)}, '
             f'house: {json.dumps(etf.house)}, '
             f"expense: {etf.expense}, aum: {etf.aum_cr}, "
-            f"ret1y: {ret1y if ret1y is not None else 'null'}, "
-            f"ret3y: {ret3y if ret3y is not None else 'null'}, "
-            f"ret5y: {ret5y if ret5y is not None else 'null'}, "
+            f"ret1y: {r1 if r1 is not None else 'null'}, "
+            f"ret3y: {r3 if r3 is not None else 'null'}, "
+            f"ret5y: {r5 if r5 is not None else 'null'}, "
             f"trackingError: {etf.tracking_error}, "
             f'liquidity: {json.dumps(etf.liquidity)} '
             "},"
