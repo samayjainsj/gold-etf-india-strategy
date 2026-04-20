@@ -1,4 +1,4 @@
-# 🥇 Gold ETF India — Strategy Dashboard
+# 🥇 Gold ETF India — Strategy Dashboard[Not For Public Use]
 
 > A self-updating, single-page comparison dashboard for every major Gold ETF listed in India.
 > Helps you pick the best fund based on returns, expense ratio, tracking error, and **post-tax real-world returns** under Budget 2024 LTCG rules.
